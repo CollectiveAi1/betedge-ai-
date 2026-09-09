@@ -145,7 +145,7 @@ export function GameDetailContent({ gameId }: GameDetailContentProps) {
                       </Link>
                     </div>
                   ))}
-                  <LockedPicksNotice hidden={totalProps - props.length} noun="props" />
+                  <LockedPicksNotice hidden={totalProps - props.length} noun="prop" />
                 </div>
               </div>
             )}

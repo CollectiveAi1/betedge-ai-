@@ -117,7 +117,7 @@ export function PropsContent() {
                 />
               );
             })}
-            <LockedPicksNotice hidden={totalProps - props.length} noun="props" />
+            <LockedPicksNotice hidden={totalProps - props.length} noun="prop" />
           </div>
         )}
 
