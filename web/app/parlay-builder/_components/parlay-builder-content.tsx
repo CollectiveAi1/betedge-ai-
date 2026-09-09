@@ -3,28 +3,32 @@ import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { AppHeader } from '@/components/app-header';
 import { AppFooter } from '@/components/app-footer';
-import { GradeBadge } from '@/components/grade-badge';
-import { PaywallGate } from '@/components/paywall-gate';
 import { getTierLimits } from '@/lib/tier-limits';
+import { useParlayStore, type ParlayLeg } from '@/lib/parlay-store';
 import { Layers, Plus, X, Calculator, Trash2, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useMounted } from '@/components/client-only';
 
-interface ParlayLeg {
-  id: string;
-  description: string;
-  odds: number;
-  sport: string;
-}
+const EMPTY_LEGS: ParlayLeg[] = [];
 
 export function ParlayBuilderContent() {
   const { data: session } = useSession();
-  const tier = (session?.user as any)?.subscriptionTier ?? 'FREE';
+  const tier = session?.user?.subscriptionTier ?? 'FREE';
   const limits = getTierLimits(tier);
 
-  const [legs, setLegs] = useState<ParlayLeg[]>([]);
+  // Legs come from the shared slip so picks added elsewhere in the app show up here.
+  // The slip is restored from localStorage on the client, so it stays empty until
+  // mount — reading it during SSR would render a different tree than hydration.
+  const mounted = useMounted();
+  const storedLegs = useParlayStore((s) => s.legs);
+  const legs = mounted ? storedLegs : EMPTY_LEGS;
+  const addToSlip = useParlayStore((s) => s.addLeg);
+  const removeLeg = useParlayStore((s) => s.removeLeg);
+  const clearSlip = useParlayStore((s) => s.clear);
+
   const [newDesc, setNewDesc] = useState('');
   const [newOdds, setNewOdds] = useState('');
   const [stake, setStake] = useState('10');
@@ -36,22 +40,26 @@ export function ParlayBuilderContent() {
       return;
     }
     if (legs.length >= limits.maxParlayLegs) {
-      toast.error(`Free tier limited to ${limits.maxParlayLegs} legs. Upgrade for more.`);
+      toast.error(
+        tier === 'FREE'
+          ? `Free tier is limited to ${limits.maxParlayLegs} legs. Upgrade for more.`
+          : `Your plan allows up to ${limits.maxParlayLegs} legs.`
+      );
       return;
     }
-    const leg: ParlayLeg = {
+    const parsedOdds = Number.parseInt(newOdds, 10);
+    if (!Number.isFinite(parsedOdds) || parsedOdds === 0) {
+      toast.error('Enter valid American odds, e.g. -110 or +150.');
+      return;
+    }
+    addToSlip({
       id: `leg-${Date.now()}`,
-      description: newDesc,
-      odds: parseInt(newOdds) || -110,
+      description: newDesc.trim(),
+      odds: parsedOdds,
       sport: 'multi',
-    };
-    setLegs([...legs, leg]);
+    });
     setNewDesc('');
     setNewOdds('');
-  }
-
-  function removeLeg(id: string) {
-    setLegs(legs.filter((l: ParlayLeg) => l.id !== id));
   }
 
   function americanToDecimal(american: number): number {
@@ -59,8 +67,13 @@ export function ParlayBuilderContent() {
     return (100 / Math.abs(american)) + 1;
   }
 
-  const combinedDecimal = (legs ?? []).reduce((acc: number, l: ParlayLeg) => acc * americanToDecimal(l.odds), 1);
-  const combinedAmerican = combinedDecimal >= 2 ? Math.round((combinedDecimal - 1) * 100) : Math.round(-100 / (combinedDecimal - 1));
+  const combinedDecimal = legs.reduce((acc: number, l: ParlayLeg) => acc * americanToDecimal(l.odds), 1);
+  const combinedAmerican =
+    legs.length === 0
+      ? 0
+      : combinedDecimal >= 2
+        ? Math.round((combinedDecimal - 1) * 100)
+        : Math.round(-100 / (combinedDecimal - 1));
   const stakeNum = parseFloat(stake) || 0;
   const payout = stakeNum * combinedDecimal;
 
@@ -82,7 +95,8 @@ export function ParlayBuilderContent() {
       if (res.ok) {
         toast.success('Parlay saved!');
       } else {
-        toast.error('Failed to save');
+        const data = await res.json().catch(() => ({}));
+        toast.error(data?.error ?? 'Failed to save');
       }
     } catch {
       toast.error('Error saving parlay');
@@ -133,39 +147,38 @@ export function ParlayBuilderContent() {
             </div>
 
             {/* Legs list */}
-            <PaywallGate isLocked={tier === 'FREE' && legs.length > limits.maxParlayLegs} message="Free tier allows 2 parlay legs. Upgrade for unlimited.">
-              <div className="space-y-2">
-                <AnimatePresence>
-                  {(legs ?? []).map((leg: ParlayLeg, i: number) => (
-                    <motion.div
-                      key={leg.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 20 }}
-                      className="bg-card rounded-xl p-4 border border-border/50 flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs font-mono text-muted-foreground bg-secondary px-2 py-1 rounded">
-                          #{i + 1}
+            <div className="space-y-2">
+              <AnimatePresence>
+                {legs.map((leg: ParlayLeg, i: number) => (
+                  <motion.div
+                    key={leg.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    className="bg-card rounded-xl p-4 border border-border/50 flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-mono text-muted-foreground bg-secondary px-2 py-1 rounded">
+                        #{i + 1}
+                      </span>
+                      <div>
+                        <span className="text-sm font-medium text-foreground">{leg.description}</span>
+                        <span className="block text-xs font-mono text-muted-foreground">
+                          {leg.odds > 0 ? `+${leg.odds}` : leg.odds}
                         </span>
-                        <div>
-                          <span className="text-sm font-medium text-foreground">{leg.description}</span>
-                          <span className="block text-xs font-mono text-muted-foreground">
-                            {leg.odds > 0 ? `+${leg.odds}` : leg.odds}
-                          </span>
-                        </div>
                       </div>
-                      <button
-                        onClick={() => removeLeg(leg.id)}
-                        className="text-muted-foreground hover:text-destructive transition-colors"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-              </div>
-            </PaywallGate>
+                    </div>
+                    <button
+                      onClick={() => removeLeg(leg.id)}
+                      aria-label={`Remove ${leg.description}`}
+                      className="text-muted-foreground hover:text-destructive transition-colors"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
 
             {legs.length === 0 && (
               <div className="text-center py-12 bg-card rounded-xl border border-dashed border-border">
@@ -185,7 +198,9 @@ export function ParlayBuilderContent() {
               <div className="space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Legs</span>
-                  <span className="font-mono text-foreground">{legs.length}</span>
+                  <span className="font-mono text-foreground">
+                    {legs.length} / {limits.maxParlayLegs}
+                  </span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Combined Odds</span>
@@ -214,7 +229,7 @@ export function ParlayBuilderContent() {
                   <Button onClick={saveParlay} loading={saving} className="flex-1" disabled={legs.length === 0}>
                     <Save className="h-4 w-4 mr-1" /> Save
                   </Button>
-                  <Button variant="outline" onClick={() => setLegs([])} disabled={legs.length === 0}>
+                  <Button variant="outline" onClick={clearSlip} disabled={legs.length === 0}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>

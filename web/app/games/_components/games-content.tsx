@@ -8,6 +8,7 @@ import { SPORTS, type SportKey } from '@/lib/sports-config';
 import { Gamepad2, MapPin, Clock, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { SafeTime } from '@/components/safe-format';
 
 interface GameData {
   id: string;
@@ -89,9 +90,17 @@ export function GamesContent() {
                         </div>
                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
                           <Clock className="h-3 w-3" />
-                          <span suppressHydrationWarning>
-                            {gameTime ? gameTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' }) : 'TBD'}
-                          </span>
+                          {gameTime ? (
+                            // `localize` renders the viewer's own timezone after mount — a
+                            // UTC start time is the wrong kickoff for every US bettor.
+                            <SafeTime
+                              date={gameTime}
+                              localize
+                              options={{ hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }}
+                            />
+                          ) : (
+                            <span>TBD</span>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center justify-between">

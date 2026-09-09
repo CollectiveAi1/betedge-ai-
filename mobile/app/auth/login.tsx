@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors, Spacing, BorderRadius, Typography, FontSize } from '../../constants/theme';
 import { ResponsibleGamblingFooter } from '../../components/ResponsibleGamblingFooter';
 import { useAuthStore } from '../../stores/authStore';
-import { loginUser, setAuthToken } from '../../services/api';
+import { demoSignIn, isDemoMode, loginUser, setAuthToken } from '../../services/api';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -19,6 +19,18 @@ export default function LoginScreen() {
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const persistSession = async (token: string, user: Parameters<NonNullable<typeof setAuth>>[1]) => {
+    setAuthToken(token);
+    await AsyncStorage.setItem('auth_token', token).catch(() => {});
+    await AsyncStorage.setItem('auth_user', JSON.stringify(user)).catch(() => {});
+    setAuth?.(token, user);
+  };
+
+  const handleDemo = async () => {
+    const { token, user } = demoSignIn();
+    await persistSession(token, user);
+  };
 
   const handleLogin = async () => {
     if (!email?.trim()) { setError('Email is required'); return; }
@@ -30,13 +42,12 @@ export default function LoginScreen() {
       const token = res?.token ?? '';
       const user = res?.user;
       if (token && user) {
-        setAuthToken(token);
-        await AsyncStorage.setItem('auth_token', token).catch(() => {});
-        await AsyncStorage.setItem('auth_user', JSON.stringify(user)).catch(() => {});
-        setAuth?.(token, user);
+        await persistSession(token, user);
       }
-    } catch {
-      setError('Login failed. Please try again.');
+    } catch (err) {
+      // The API client throws AuthError with the server's own message, so a bad
+      // password now reads as "Invalid email or password" instead of succeeding.
+      setError(err instanceof Error ? err.message : 'Login failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -108,16 +119,12 @@ export default function LoginScreen() {
             )}
           </Pressable>
 
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <Pressable style={styles.googleBtn}>
-            <MaterialCommunityIcons name="google" size={20} color={Colors.textPrimary} />
-            <Text style={styles.googleBtnText}>Sign in with Google</Text>
-          </Pressable>
+          {isDemoMode() && (
+            <Pressable style={styles.demoBtn} onPress={handleDemo}>
+              <MaterialCommunityIcons name="flask-outline" size={18} color={Colors.textPrimary} />
+              <Text style={styles.demoBtnText}>Explore demo data</Text>
+            </Pressable>
+          )}
         </View>
 
         <View style={styles.bottomRow}>
@@ -163,11 +170,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
   btnDisabled: { opacity: 0.6 },
-  loginBtnText: { ...Typography.body, fontWeight: '700', color: Colors.white },
-  divider: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginVertical: Spacing.sm },
-  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
-  dividerText: { ...Typography.caption },
-  googleBtn: {
+  demoBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -177,7 +180,8 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.sm,
     paddingVertical: Spacing.sm + 4,
   },
-  googleBtnText: { ...Typography.body },
+  demoBtnText: { ...Typography.body },
+  loginBtnText: { ...Typography.body, fontWeight: '700', color: Colors.white },
   bottomRow: { flexDirection: 'row', justifyContent: 'center', marginTop: Spacing.lg },
   bottomText: { ...Typography.body, color: Colors.textMuted },
   linkText: { ...Typography.body, color: Colors.accent, fontWeight: '700' },

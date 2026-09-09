@@ -3,6 +3,8 @@ import { Shield } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 export function AppFooter() {
+  // Rendering the real year during SSR would mismatch a client in a different
+  // timezone, so start from a fixed value and correct it after mount.
   const [year, setYear] = useState(2026);
   useEffect(() => { setYear(new Date().getFullYear()); }, []);
 

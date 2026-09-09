@@ -1,7 +1,18 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { getMockProps } from '@/lib/mock-data';
+import { getViewerLimits } from '@/lib/viewer';
 import type { SportKey } from '@/lib/sports-config';
+
+const PAID_ANALYSIS_FIELDS = ['keyFactors', 'risks'] as const;
+
+/** Key factors and risks are the paid part of the research packet. */
+function redact(prop: any, showFullAnalysis: boolean) {
+  if (showFullAnalysis) return prop;
+  const rest = { ...(prop ?? {}) };
+  for (const field of PAID_ANALYSIS_FIELDS) delete rest[field];
+  return rest;
+}
 
 export async function GET(request: Request) {
   try {
@@ -11,6 +22,7 @@ export async function GET(request: Request) {
     const propId = searchParams.get('propId');
     const gameId = searchParams.get('gameId');
 
+    const { limits } = await getViewerLimits(request);
     let props = getMockProps(sportParam ?? undefined);
 
     if (searchQuery) {
@@ -23,8 +35,9 @@ export async function GET(request: Request) {
     }
 
     if (propId) {
-      const prop = props.find((p: any) => p?.id === propId);
-      return NextResponse.json({ prop: prop ?? null, props: prop ? [prop] : [] });
+      const found = props.find((p: any) => p?.id === propId);
+      const prop = found ? redact(found, limits.showFullAnalysis) : null;
+      return NextResponse.json({ prop, props: prop ? [prop] : [] });
     }
 
     if (gameId) {
@@ -35,9 +48,10 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({ props });
+    const visible = props.slice(0, limits.dailyProps).map((p: any) => redact(p, limits.showFullAnalysis));
+    return NextResponse.json({ props: visible, total: props.length, limit: limits.dailyProps });
   } catch (error: any) {
     console.error('Props API error:', error);
-    return NextResponse.json({ props: getMockProps() });
+    return NextResponse.json({ props: [] }, { status: 500 });
   }
 }

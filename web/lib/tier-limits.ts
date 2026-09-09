@@ -55,7 +55,3 @@ export const TIER_LIMITS: Record<SubscriptionTier, TierLimits> = {
 export function getTierLimits(tier: string): TierLimits {
   return TIER_LIMITS[(tier ?? 'FREE') as SubscriptionTier] ?? TIER_LIMITS.FREE;
 }
-
-export function isPremium(tier: string): boolean {
-  return tier === 'PRO' || tier === 'ELITE';
-}

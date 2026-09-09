@@ -7,6 +7,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { Colors, Spacing, BorderRadius, Typography } from '../constants/theme';
 import { ResponsibleGamblingFooter } from '../components/ResponsibleGamblingFooter';
 import { getCheckoutUrl } from '../services/api';
+import { notify } from '../utils/notify';
 
 interface TierCardProps {
   name: string;
@@ -48,9 +49,16 @@ export default function UpgradeScreen() {
   const insets = useSafeAreaInsets();
 
   const handleSubscribe = async (tier: string) => {
-    const url = await getCheckoutUrl(tier);
-    if (url) {
-      await WebBrowser.openBrowserAsync(url).catch(() => {});
+    try {
+      // Plan ids match the web checkout route's price map.
+      const url = await getCheckoutUrl(tier === 'elite' ? 'elite-monthly' : 'pro-monthly');
+      if (url) {
+        await WebBrowser.openBrowserAsync(url).catch(() => {});
+      } else {
+        notify('Checkout is not available right now. Please try again later.', 'Upgrade');
+      }
+    } catch {
+      notify('Could not start checkout. Please try again.', 'Upgrade');
     }
   };
 

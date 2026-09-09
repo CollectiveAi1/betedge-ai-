@@ -5,11 +5,12 @@ import { AppHeader } from '@/components/app-header';
 import { AppFooter } from '@/components/app-footer';
 import { OddsTable } from '@/components/odds-table';
 import { GradeBadge } from '@/components/grade-badge';
-import { PaywallGate } from '@/components/paywall-gate';
+import { LockedPicksNotice } from '@/components/locked-picks-notice';
 import { PickCardSkeleton } from '@/components/loading-skeleton';
 import { getTierLimits } from '@/lib/tier-limits';
 import { ArrowLeft, Clock, MapPin, Target } from 'lucide-react';
 import Link from 'next/link';
+import { SafeDate } from '@/components/safe-format';
 
 interface GameDetailContentProps {
   gameId: string;
@@ -17,12 +18,13 @@ interface GameDetailContentProps {
 
 export function GameDetailContent({ gameId }: GameDetailContentProps) {
   const { data: session } = useSession();
-  const tier = (session?.user as any)?.subscriptionTier ?? 'FREE';
+  const tier = session?.user?.subscriptionTier ?? 'FREE';
   const limits = getTierLimits(tier);
 
   const [game, setGame] = useState<any>(null);
   const [odds, setOdds] = useState<any[]>([]);
   const [props, setProps] = useState<any[]>([]);
+  const [totalProps, setTotalProps] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -40,6 +42,7 @@ export function GameDetailContent({ gameId }: GameDetailContentProps) {
         setGame(gamesData?.game ?? gamesData?.games?.[0] ?? null);
         setOdds(oddsData?.odds ?? []);
         setProps(propsData?.props ?? []);
+        setTotalProps(propsData?.total ?? propsData?.props?.length ?? 0);
       } catch {
         // keep empty state
       } finally {
@@ -68,9 +71,15 @@ export function GameDetailContent({ gameId }: GameDetailContentProps) {
             <div className="bg-card rounded-xl p-6 border border-border/50 mb-6" style={{ boxShadow: 'var(--shadow-md)' }}>
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
                 <Clock className="h-3 w-3" />
-                <span suppressHydrationWarning>
-                  {game?.startTime ? new Date(game.startTime).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', timeZone: 'UTC' }) : 'TBD'}
-                </span>
+                {game?.startTime ? (
+                  <SafeDate
+                    date={new Date(game.startTime)}
+                    localize
+                    options={{ weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }}
+                  />
+                ) : (
+                  <span>TBD</span>
+                )}
                 {game?.venue && (
                   <>
                     <span>·</span>
@@ -93,14 +102,21 @@ export function GameDetailContent({ gameId }: GameDetailContentProps) {
             {/* Odds table */}
             <div className="bg-card rounded-xl p-4 border border-border/50 mb-6" style={{ boxShadow: 'var(--shadow-sm)' }}>
               <h2 className="font-display text-lg font-bold text-foreground mb-3">Odds Comparison</h2>
-              <PaywallGate isLocked={false}>
-                <OddsTable
-                  odds={odds}
-                  homeTeam={game?.homeTeam ?? 'Home'}
-                  awayTeam={game?.awayTeam ?? 'Away'}
-                  maxBooks={limits.maxBooks}
-                />
-              </PaywallGate>
+              <OddsTable
+                odds={odds}
+                homeTeam={game?.homeTeam ?? 'Home'}
+                awayTeam={game?.awayTeam ?? 'Away'}
+                maxBooks={limits.maxBooks}
+              />
+              {odds.length > limits.maxBooks && (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Showing {limits.maxBooks} of {odds.length} books.{' '}
+                  <Link href="/upgrade" className="text-primary hover:underline">
+                    Upgrade
+                  </Link>{' '}
+                  to compare them all.
+                </p>
+              )}
             </div>
 
             {/* Player props */}
@@ -112,7 +128,7 @@ export function GameDetailContent({ gameId }: GameDetailContentProps) {
                 </div>
                 <div className="space-y-3">
                   {(props ?? []).map((prop: any, i: number) => (
-                    <PaywallGate key={prop?.id ?? i} isLocked={tier === 'FREE' && i >= limits.dailyProps}>
+                    <div key={prop?.id ?? i}>
                       <Link href={`/props/${prop?.id ?? ''}`}>
                         <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors">
                           <div className="flex items-center gap-3">
@@ -127,8 +143,9 @@ export function GameDetailContent({ gameId }: GameDetailContentProps) {
                           </span>
                         </div>
                       </Link>
-                    </PaywallGate>
+                    </div>
                   ))}
+                  <LockedPicksNotice hidden={totalProps - props.length} noun="prop" />
                 </div>
               </div>
             )}

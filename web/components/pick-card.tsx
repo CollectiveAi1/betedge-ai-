@@ -110,8 +110,9 @@ export function PickCard({
         {edgeSummary ?? ''}
       </p>
 
-      {/* Action buttons */}
-      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+      {/* Action buttons — always visible on touch, hover-revealed from md up.
+          `opacity-0` alone left them unusable on phones, which have no hover. */}
+      <div className="flex items-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity">
         <button
           onClick={(e: React.MouseEvent) => { e.stopPropagation(); onSave?.(); }}
           className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary bg-secondary px-2.5 py-1.5 rounded-lg transition-colors"

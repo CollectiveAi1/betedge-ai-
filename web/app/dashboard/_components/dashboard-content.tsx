@@ -5,12 +5,11 @@ import { AppHeader } from '@/components/app-header';
 import { AppFooter } from '@/components/app-footer';
 import { SportFilter } from '@/components/sport-filter';
 import { PickCard } from '@/components/pick-card';
-import { PaywallGate } from '@/components/paywall-gate';
+import { LockedPicksNotice } from '@/components/locked-picks-notice';
 import { PickCardSkeleton } from '@/components/loading-skeleton';
 import type { SportKey } from '@/lib/sports-config';
-import { getTierLimits } from '@/lib/tier-limits';
 import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
+import { addPickToParlay, savePickToTracker } from '@/lib/pick-actions';
 import { TrendingUp, Flame, Clock } from 'lucide-react';
 
 interface PickData {
@@ -32,10 +31,10 @@ export function DashboardContent() {
   const router = useRouter();
   const [sport, setSport] = useState<SportKey | 'all'>('all');
   const [picks, setPicks] = useState<PickData[]>([]);
+  const [totalPicks, setTotalPicks] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  const tier = (session?.user as any)?.subscriptionTier ?? 'FREE';
-  const limits = getTierLimits(tier);
+  const tier = session?.user?.subscriptionTier ?? 'FREE';
 
   useEffect(() => {
     async function loadPicks() {
@@ -45,38 +44,16 @@ export function DashboardContent() {
         const res = await fetch(`/api/dashboard/picks${params}`);
         const data = await res.json().catch(() => ({}));
         setPicks(data?.picks ?? []);
+        setTotalPicks(data?.total ?? data?.picks?.length ?? 0);
       } catch {
         setPicks([]);
+        setTotalPicks(0);
       } finally {
         setLoading(false);
       }
     }
     loadPicks();
   }, [sport]);
-
-  async function handleSave(pick: PickData) {
-    try {
-      const res = await fetch('/api/user/picks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sport: pick.sport,
-          league: pick.sport?.toUpperCase(),
-          marketType: 'PROP',
-          description: `${pick.playerName} ${pick.statType} ${pick.recommendation}`,
-          selection: pick.recommendation,
-          odds: pick.odds,
-        }),
-      });
-      if (res.ok) {
-        toast.success('Pick saved to tracker!');
-      } else {
-        toast.error('Failed to save pick');
-      }
-    } catch {
-      toast.error('Failed to save pick');
-    }
-  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -105,7 +82,7 @@ export function DashboardContent() {
               <TrendingUp className="h-3 w-3" /> Today&apos;s Picks
             </div>
             <span className="text-lg font-bold font-mono text-foreground">
-              {picks?.length ?? 0}
+              {totalPicks || (picks?.length ?? 0)}
             </span>
           </div>
           <div className="bg-card rounded-xl p-3 border border-border/50">
@@ -118,10 +95,10 @@ export function DashboardContent() {
           </div>
           <div className="bg-card rounded-xl p-3 border border-border/50">
             <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-              <Clock className="h-3 w-3" /> Views Left
+              <Clock className="h-3 w-3" /> Locked
             </div>
             <span className="text-lg font-bold font-mono text-foreground">
-              {tier === 'FREE' ? `${Math.max(0, limits.dailyPicks - (picks?.length ?? 0))}` : '∞'}
+              {tier === 'FREE' ? Math.max(0, totalPicks - picks.length) : '∞'}
             </span>
           </div>
         </div>
@@ -135,29 +112,26 @@ export function DashboardContent() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {(picks ?? []).map((pick: PickData, i: number) => {
-              const isLocked = tier === 'FREE' && i >= limits.dailyPicks;
-              return (
-                <PaywallGate key={pick?.id ?? i} isLocked={isLocked}>
-                  <PickCard
-                    id={pick?.id ?? ''}
-                    playerName={pick?.playerName ?? 'Unknown'}
-                    team={pick?.team ?? ''}
-                    sport={pick?.sport ?? 'nfl'}
-                    statType={pick?.statType ?? ''}
-                    line={pick?.line ?? 0}
-                    odds={pick?.odds ?? 0}
-                    grade={pick?.grade ?? 'C'}
-                    confidence={pick?.confidence ?? 0}
-                    recommendation={pick?.recommendation ?? 'N/A'}
-                    edgeSummary={pick?.edgeSummary ?? ''}
-                    onSave={() => handleSave(pick)}
-                    onAddParlay={() => toast.success('Added to parlay!')}
-                    onClick={() => router.push(`/props/${pick?.id ?? ''}`)}
-                  />
-                </PaywallGate>
-              );
-            })}
+            {(picks ?? []).map((pick: PickData, i: number) => (
+              <PickCard
+                key={pick?.id ?? i}
+                id={pick?.id ?? ''}
+                playerName={pick?.playerName ?? 'Unknown'}
+                team={pick?.team ?? ''}
+                sport={pick?.sport ?? 'nfl'}
+                statType={pick?.statType ?? ''}
+                line={pick?.line ?? 0}
+                odds={pick?.odds ?? 0}
+                grade={pick?.grade ?? 'C'}
+                confidence={pick?.confidence ?? 0}
+                recommendation={pick?.recommendation ?? 'N/A'}
+                edgeSummary={pick?.edgeSummary ?? ''}
+                onSave={() => savePickToTracker(pick)}
+                onAddParlay={() => addPickToParlay(pick)}
+                onClick={() => router.push(`/props/${pick?.id ?? ''}`)}
+              />
+            ))}
+            <LockedPicksNotice hidden={totalPicks - picks.length} />
           </div>
         )}
 

@@ -1,22 +1,23 @@
 export const dynamic = 'force-dynamic';
-import { auth } from '@/auth';
+import { requireUserId } from '@/lib/api-auth';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getStripe } from '@/lib/stripe';
 
 export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const userId = await requireUserId(request);
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    const stripeKey = process.env.STRIPE_SECRET_KEY;
-    if (!stripeKey || stripeKey.startsWith('placeholder')) {
+    const stripe = getStripe();
+    if (!stripe) {
       return NextResponse.json({ error: 'Stripe is not configured' }, { status: 503 });
     }
 
     const sub = await prisma.subscription.findUnique({
-      where: { userId: session.user.id },
+      where: { userId },
     });
 
     if (!sub?.stripeCustomerId) {
@@ -24,9 +25,6 @@ export async function POST(request: Request) {
     }
 
     const origin = request.headers.get('origin') ?? process.env.NEXTAUTH_URL ?? 'http://localhost:3000';
-
-    const Stripe = (await import('stripe')).default;
-    const stripe = new Stripe(stripeKey, { apiVersion: '2024-06-20' as any });
 
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: sub.stripeCustomerId,

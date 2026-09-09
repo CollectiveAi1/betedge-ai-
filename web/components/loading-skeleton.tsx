@@ -40,12 +40,3 @@ export function GameCardSkeleton() {
   );
 }
 
-export function TableSkeleton({ rows = 5 }: { rows?: number }) {
-  return (
-    <div className="space-y-2">
-      {Array.from({ length: rows }).map((_: unknown, i: number) => (
-        <div key={i} className="h-10 bg-secondary rounded animate-pulse" />
-      ))}
-    </div>
-  );
-}

@@ -1,0 +1,140 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A superseded run on the same branch has nothing left to prove.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Prisma needs a parseable URL to generate a client and Next needs one to build.
+  # Neither connects, so a dummy is fine; the e2e job overrides it with a live one.
+  DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+  NEXTAUTH_SECRET: ci-placeholder-secret-not-used-outside-ci
+
+jobs:
+  web:
+    name: Web — types, lint, build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+
+      # --no-immutable because no lockfile is committed yet: Yarn enables immutable
+      # installs under CI and fails outright without one. Commit a lockfile for both
+      # projects and drop this flag — that is what makes CI runs reproducible.
+      - name: Install
+        run: corepack enable && yarn install --no-immutable
+
+      # Every later step reads the generated types, so this cannot move.
+      - name: Generate Prisma client
+        run: yarn prisma generate
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: yarn lint
+
+      # Catches the class of bug behind most Next.js hydration failures. Separate
+      # from `yarn lint` because it runs with --no-config-lookup.
+      - name: SSR / hydration lint
+        run: npx eslint -c eslint.ssr.config.mjs --no-config-lookup .
+
+      - name: Build
+        run: yarn build
+
+  web-e2e:
+    name: Web — auth end-to-end
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U ci -d ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+
+      - name: Install
+        run: corepack enable && yarn install --no-immutable
+
+      - name: Generate Prisma client
+        run: yarn prisma generate
+
+      - name: Create schema
+        run: yarn prisma db push --skip-generate
+
+      - name: Build
+        run: yarn build
+
+      - name: Start server
+        run: |
+          nohup yarn start > /tmp/server.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf -o /dev/null http://127.0.0.1:3000/login && exit 0
+            sleep 1
+          done
+          echo "server did not become ready"
+          cat /tmp/server.log
+          exit 1
+        env:
+          NEXTAUTH_URL: http://127.0.0.1:3000
+
+      - name: Server log on failure
+        if: failure()
+        run: cat /tmp/server.log || true
+
+      # signup -> credentials login -> session, against the running server.
+      - name: Auth smoke test
+        run: node scripts/auth-smoke.mjs
+        env:
+          AUTH_SMOKE_BASE: http://127.0.0.1:3000
+
+  mobile:
+    name: Mobile — types, bundle
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+
+      - name: Install
+        run: corepack enable && yarn install --no-immutable
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      # Proves the app still bundles. Native builds need EAS, but a broken import
+      # or bad route fails here just the same.
+      - name: Bundle
+        run: npx expo export --platform web --output-dir /tmp/expo-web

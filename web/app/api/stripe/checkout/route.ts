@@ -1,7 +1,8 @@
 export const dynamic = 'force-dynamic';
-import { auth } from '@/auth';
+import { requireUserId } from '@/lib/api-auth';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getStripe } from '@/lib/stripe';
 
 // Stripe price IDs would be set via env vars after Stripe setup
 const PRICE_MAP: Record<string, Record<string, string>> = {
@@ -16,14 +17,14 @@ const PRICE_MAP: Record<string, Record<string, string>> = {
 };
 
 export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const userId = await requireUserId(request);
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    const stripeKey = process.env.STRIPE_SECRET_KEY;
-    if (!stripeKey || stripeKey.startsWith('placeholder')) {
+    const stripe = getStripe();
+    if (!stripe) {
       return NextResponse.json(
         { error: 'Stripe is not configured yet. Please set up Stripe API keys.' },
         { status: 503 }
@@ -39,25 +40,26 @@ export async function POST(request: Request) {
     }
 
     // Get or create Stripe customer
-    let sub = await prisma.subscription.findUnique({
-      where: { userId: session.user.id },
+    const sub = await prisma.subscription.findUnique({
+      where: { userId },
     });
 
     const origin = request.headers.get('origin') ?? process.env.NEXTAUTH_URL ?? 'http://localhost:3000';
 
-    const Stripe = (await import('stripe')).default;
-    const stripe = new Stripe(stripeKey, { apiVersion: '2024-06-20' as any });
-
     let customerId = sub?.stripeCustomerId;
     if (!customerId) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true },
+      });
       const customer = await stripe.customers.create({
-        email: session.user?.email ?? undefined,
-        metadata: { userId: session.user.id },
+        email: user?.email ?? undefined,
+        metadata: { userId },
       });
       customerId = customer.id;
       await prisma.subscription.upsert({
-        where: { userId: session.user.id },
-        create: { userId: session.user.id, stripeCustomerId: customerId },
+        where: { userId },
+        create: { userId, stripeCustomerId: customerId },
         update: { stripeCustomerId: customerId },
       });
     }
@@ -68,8 +70,8 @@ export async function POST(request: Request) {
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${origin}/dashboard?subscribed=true`,
       cancel_url: `${origin}/upgrade`,
-      client_reference_id: session.user.id,
-      metadata: { userId: session.user.id, planId: planId ?? '' },
+      client_reference_id: userId,
+      metadata: { userId, planId: planId ?? '' },
       subscription_data: {
         trial_period_days: planId?.startsWith('pro') ? 7 : undefined,
       },

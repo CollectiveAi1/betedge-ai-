@@ -39,8 +39,10 @@ export default function SignupScreen() {
         await AsyncStorage.setItem('auth_user', JSON.stringify(user)).catch(() => {});
         setAuth?.(token, user);
       }
-    } catch {
-      setError('Signup failed. Please try again.');
+    } catch (err) {
+      // The API client throws AuthError with the server's own message, so a bad
+      // password now reads as "Invalid email or password" instead of succeeding.
+      setError(err instanceof Error ? err.message : 'Signup failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -88,11 +90,6 @@ export default function SignupScreen() {
           >
             {loading ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.submitBtnText}>Create Account</Text>}
           </Pressable>
-
-          <Pressable style={styles.googleBtn}>
-            <MaterialCommunityIcons name="google" size={20} color={Colors.textPrimary} />
-            <Text style={styles.googleBtnText}>Sign in with Google</Text>
-          </Pressable>
         </View>
 
         <View style={styles.bottomRow}>
@@ -138,17 +135,6 @@ const styles = StyleSheet.create({
   },
   btnDisabled: { opacity: 0.4 },
   submitBtnText: { ...Typography.body, fontWeight: '700', color: Colors.white },
-  googleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: BorderRadius.sm,
-    paddingVertical: Spacing.sm + 4,
-  },
-  googleBtnText: { ...Typography.body },
   bottomRow: { flexDirection: 'row', justifyContent: 'center', marginTop: Spacing.lg },
   bottomText: { ...Typography.body, color: Colors.textMuted },
   linkText: { ...Typography.body, color: Colors.accent, fontWeight: '700' },

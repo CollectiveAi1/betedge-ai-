@@ -1,11 +1,11 @@
 export const dynamic = 'force-dynamic';
-import { auth } from '@/auth';
+import { requireUserId } from '@/lib/api-auth';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const userId = await requireUserId(request);
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {
@@ -15,10 +15,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (!['WIN', 'LOSS', 'PUSH', 'PENDING'].includes(result)) {
       return NextResponse.json({ error: 'Invalid result' }, { status: 400 });
     }
-    const pick = await prisma.userPick.updateMany({
-      where: { id, userId: session.user.id },
+    // Scoped by userId so one user cannot grade another user's pick; a zero count
+    // means the pick does not exist or is not theirs.
+    const { count } = await prisma.userPick.updateMany({
+      where: { id, userId: userId },
       data: { result },
     });
+    if (count === 0) {
+      return NextResponse.json({ error: 'Pick not found' }, { status: 404 });
+    }
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Update pick error:', error);

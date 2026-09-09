@@ -1,17 +1,46 @@
 export const dynamic = 'force-dynamic';
-import { auth } from '@/auth';
+import { requireUserId } from '@/lib/api-auth';
 import { NextResponse } from 'next/server';
 import { MOCK_ANALYSIS } from '@/lib/mock-data';
+import { getCached, setCache, ANALYSIS_CACHE_TTL } from '@/lib/cache';
+
+const SSE_HEADERS = {
+  'Content-Type': 'text/event-stream',
+  'Cache-Control': 'no-cache',
+  Connection: 'keep-alive',
+};
+
+/** Sends a single SSE frame and closes — used for cache hits. */
+function sseOnce(payload: unknown): Response {
+  const encoder = new TextEncoder();
+  return new Response(
+    new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+        controller.close();
+      },
+    }),
+    { headers: SSE_HEADERS }
+  );
+}
 
 export async function POST(request: Request) {
-  const session = await auth();
-  if (!session) {
+  const userId = await requireUserId(request);
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
     const body = await request.json();
     const { marketType, playerName, statType, line, sport, contextData } = body ?? {};
+
+    // Analyses are deterministic for a given market, and model calls are billed, so
+    // serve a recent one instead of paying for it again on every refresh.
+    const cacheKey = `analysis-${sport}-${playerName}-${statType}-${line}-${marketType}`;
+    const cached = getCached<unknown>(cacheKey);
+    if (cached) {
+      return sseOnce({ status: 'completed', result: cached, cached: true });
+    }
 
     const apiKey = process.env.ABACUSAI_API_KEY;
     if (!apiKey) {
@@ -96,6 +125,7 @@ Provide your analysis as JSON.`;
                 if (dataStr === '[DONE]') {
                   try {
                     const finalResult = JSON.parse(buffer);
+                    setCache(cacheKey, finalResult, ANALYSIS_CACHE_TTL);
                     const finalData = JSON.stringify({ status: 'completed', result: finalResult });
                     controller.enqueue(encoder.encode(`data: ${finalData}\n\n`));
                   } catch {
@@ -118,6 +148,7 @@ Provide your analysis as JSON.`;
           if (buffer) {
             try {
               const finalResult = JSON.parse(buffer);
+              setCache(cacheKey, finalResult, ANALYSIS_CACHE_TTL);
               const finalData = JSON.stringify({ status: 'completed', result: finalResult });
               controller.enqueue(encoder.encode(`data: ${finalData}\n\n`));
             } catch {
@@ -135,13 +166,7 @@ Provide your analysis as JSON.`;
       },
     });
 
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
-    });
+    return new Response(stream, { headers: SSE_HEADERS });
   } catch (error: any) {
     console.error('AI analyze error:', error);
     return NextResponse.json({ error: 'Analysis failed: ' + (error?.message ?? 'unknown') }, { status: 500 });

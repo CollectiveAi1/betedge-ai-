@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { AppHeader } from '@/components/app-header';
 import { AppFooter } from '@/components/app-footer';
 import { Zap, CheckCircle, Star, Crown } from 'lucide-react';
@@ -51,12 +52,19 @@ const PLANS = [
 ];
 
 export function UpgradeContent() {
-  const { data: session } = useSession();
-  const tier = (session?.user as any)?.subscriptionTier ?? 'FREE';
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const tier = session?.user?.subscriptionTier ?? 'FREE';
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
 
   async function handleSubscribe(planId: string) {
+    // Checkout requires a session; sending an anonymous visitor to sign up first is
+    // clearer than surfacing the API's 401.
+    if (status !== 'authenticated') {
+      router.push(`/signup?next=${encodeURIComponent('/upgrade')}`);
+      return;
+    }
     setLoadingPlan(planId);
     try {
       const res = await fetch('/api/stripe/checkout', {
@@ -66,7 +74,7 @@ export function UpgradeContent() {
       });
       const data = await res.json().catch(() => ({}));
       if (data?.url) {
-        window.location.href = data.url;
+        window.location.assign(data.url);
       } else {
         toast.error(data?.error ?? 'Unable to start checkout');
       }

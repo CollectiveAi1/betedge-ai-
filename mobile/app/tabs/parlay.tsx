@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, Pressable, TextInput, StyleSheet, FlatList, Alert, Platform } from 'react-native';
+import { View, Text, Pressable, TextInput, StyleSheet, FlatList } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, BorderRadius, Typography, FontSize } from '../../constants/theme';
@@ -8,7 +8,8 @@ import { ResponsibleGamblingFooter } from '../../components/ResponsibleGamblingF
 import { PaywallBanner } from '../../components/PaywallBanner';
 import { useParlayStore } from '../../stores/parlayStore';
 import { useAuthStore } from '../../stores/authStore';
-import { saveParlays } from '../../services/api';
+import { saveParlay } from '../../services/api';
+import { notify } from '../../utils/notify';
 import type { ParlayLeg } from '../../types';
 
 function americanToDecimal(odds: number): number {
@@ -40,13 +41,15 @@ export default function ParlayTab() {
 
   const handleSave = async () => {
     if ((legs?.length ?? 0) < 2) {
-      const msg = 'Add at least 2 legs to save a parlay.';
-      if (Platform.OS === 'web') { window.alert(msg); } else { Alert.alert('Parlay', msg); }
+      notify('Add at least 2 legs to save a parlay.', 'Parlay');
       return;
     }
-    await saveParlays(legs);
-    const msg = 'Parlay saved successfully!';
-    if (Platform.OS === 'web') { window.alert(msg); } else { Alert.alert('Success', msg); }
+    try {
+      await saveParlay(legs, combinedAmerican);
+      notify('Parlay saved successfully!', 'Success');
+    } catch {
+      notify('Could not save your parlay. Please try again.', 'Parlay');
+    }
   };
 
   const renderLeg = useCallback(({ item }: { item: ParlayLeg }) => (

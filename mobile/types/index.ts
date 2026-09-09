@@ -125,9 +125,3 @@ export interface Alert {
   sportEmoji: string;
 }
 
-export interface TierFeature {
-  name: string;
-  free: string;
-  pro: string;
-  elite: string;
-}

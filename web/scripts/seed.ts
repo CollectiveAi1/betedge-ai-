@@ -3,27 +3,41 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+// Seeding an account is opt-in and credentials come from the environment, so no
+// password ever lives in version control. Set SEED_ADMIN_EMAIL and
+// SEED_ADMIN_PASSWORD to provision an ELITE account; leave them unset to skip.
 async function main() {
-  console.log('Seeding database...');
+  const email = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
+  const password = process.env.SEED_ADMIN_PASSWORD;
 
-  // Test admin account (hidden - do not expose)
-  const testPassword = await bcrypt.hash('1$zROmioM5', 12);
+  if (!email || !password) {
+    console.log(
+      'Skipping admin seed: set SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD to provision one.'
+    );
+    return;
+  }
+
+  if (password.length < 12) {
+    throw new Error('SEED_ADMIN_PASSWORD must be at least 12 characters.');
+  }
+
+  const hashed = await bcrypt.hash(password, 12);
   await prisma.user.upsert({
-    where: { email: 'abacus-d6dffe7a@example.com' },
+    where: { email },
     update: {},
     create: {
-      email: 'abacus-d6dffe7a@example.com',
-      name: 'Admin',
-      password: testPassword,
+      email,
+      name: process.env.SEED_ADMIN_NAME ?? 'Admin',
+      password: hashed,
       subscriptionTier: 'ELITE',
     },
   });
 
-  console.log('Database seeded successfully!');
+  console.log(`Seeded admin account for ${email}.`);
 }
 
 main()
-  .catch((e: any) => {
+  .catch((e: unknown) => {
     console.error('Seed error:', e);
     process.exit(1);
   })

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView, Platform, Alert } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,6 +12,7 @@ import { LoadingSkeleton } from '../../../components/LoadingSkeleton';
 import { ResponsibleGamblingFooter } from '../../../components/ResponsibleGamblingFooter';
 import { useParlayStore } from '../../../stores/parlayStore';
 import { getPropDetail, savePick } from '../../../services/api';
+import { notify } from '../../../utils/notify';
 
 function AccordionSection({ title, icon, iconColor, children, defaultOpen = true }: {
   title: string; icon: string; iconColor: string; children: React.ReactNode; defaultOpen?: boolean;
@@ -44,9 +45,21 @@ export default function PropDetailScreen() {
   const isOver = prop?.recommendation === 'OVER' || prop?.recommendation === 'LEAN OVER';
 
   const handleSave = async () => {
-    await savePick(propId);
-    const msg = 'Pick saved!';
-    if (Platform.OS === 'web') { window.alert(msg); } else { Alert.alert('Saved', msg); }
+    if (!prop) return;
+    const bestOdds = prop.bookOdds?.find((o) => o?.isBest) ?? prop.bookOdds?.[0];
+    try {
+      await savePick({
+        sport: prop.sport,
+        statType: prop.statType,
+        playerName: prop.playerName,
+        line: prop.line,
+        recommendation: prop.recommendation,
+        odds: bestOdds?.odds ?? -110,
+      });
+      notify('Pick saved!', 'Saved');
+    } catch {
+      notify('Could not save that pick. Please try again.', 'Saved');
+    }
   };
 
   const handleAddToParlay = () => {
@@ -64,7 +77,7 @@ export default function PropDetailScreen() {
       odds: bestOdds?.odds ?? -110,
     });
     const msg = 'Added to parlay!';
-    if (Platform.OS === 'web') { window.alert(msg); } else { Alert.alert('Parlay', msg); }
+    notify(msg, 'Parlay');
   };
 
   if (isLoading || !prop) {

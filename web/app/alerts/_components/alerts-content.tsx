@@ -22,7 +22,7 @@ interface AlertItem {
 
 export function AlertsContent() {
   const { data: session } = useSession();
-  const tier = (session?.user as any)?.subscriptionTier ?? 'FREE';
+  const tier = session?.user?.subscriptionTier ?? 'FREE';
   const limits = getTierLimits(tier);
 
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
@@ -30,9 +30,9 @@ export function AlertsContent() {
   const [newDesc, setNewDesc] = useState('');
   const [newType, setNewType] = useState('LINE_MOVEMENT');
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadAlerts = useCallback(async () => {
-    setLoading(true);
     try {
       const res = await fetch('/api/user/alerts');
       const data = await res.json().catch(() => ({}));
@@ -41,7 +41,11 @@ export function AlertsContent() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { loadAlerts(); }, [loadAlerts]);
+  // Fires once on mount; `loading` already starts true, so the loader does
+  // not have to raise it synchronously from inside the effect.
+  useEffect(() => {
+    void loadAlerts();
+  }, [loadAlerts]);
 
   async function createAlert() {
     if (!newDesc) { toast.error('Enter a market description.'); return; }
@@ -64,6 +68,24 @@ export function AlertsContent() {
     finally { setSaving(false); }
   }
 
+  async function deleteAlert(id: string) {
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/user/alerts/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        toast.success('Alert removed');
+        loadAlerts();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data?.error ?? 'Failed to remove alert');
+      }
+    } catch {
+      toast.error('Failed to remove alert');
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <AppHeader />
@@ -83,7 +105,15 @@ export function AlertsContent() {
         <PaywallGate isLocked={!limits.alertsEnabled} message="Alerts are a premium feature. Upgrade to Pro to set line movement and injury alerts.">
           {/* Create alert */}
           <div className="bg-card rounded-xl p-4 border border-border/50 mb-6" style={{ boxShadow: 'var(--shadow-sm)' }}>
-            <h2 className="font-semibold text-foreground mb-3">New Alert</h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold text-foreground">New Alert</h2>
+              {limits.alertsEnabled && (
+                <span className="text-xs text-muted-foreground font-mono">
+                  {alerts.filter((a: AlertItem) => a?.isActive).length}
+                  {limits.maxAlerts < 999 ? ` / ${limits.maxAlerts}` : ''} active
+                </span>
+              )}
+            </div>
             <div className="flex flex-col sm:flex-row gap-3">
               <select
                 value={newType}
@@ -130,9 +160,21 @@ export function AlertsContent() {
                       <div className="text-xs text-muted-foreground">{alert?.alertType?.replace('_', ' ') ?? ''}</div>
                     </div>
                   </div>
-                  <span className={`text-xs px-2 py-1 rounded ${alert?.isActive ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                    {alert?.isActive ? 'Active' : 'Inactive'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs px-2 py-1 rounded ${alert?.isActive ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                      {alert?.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label={`Delete alert for ${alert?.marketDescription ?? 'this market'}`}
+                      onClick={() => deleteAlert(alert.id)}
+                      loading={deletingId === alert.id}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </motion.div>
               ))
             ) : (

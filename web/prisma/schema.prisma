@@ -1,7 +1,7 @@
 generator client {
-    provider = "prisma-client-js"
-    binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
-    output = "/home/ubuntu/betedge_ai/nextjs_space/node_modules/.prisma/client"
+    provider      = "prisma-client-js"
+    output        = "../node_modules/.prisma/client"
+    binaryTargets = ["native"]
 }
 
 datasource db {
@@ -25,7 +25,6 @@ model User {
   picks            UserPick[]
   parlays          Parlay[]
   alerts           Alert[]
-  dailyPickCounts  DailyPickCount[]
 }
 
 model Account {
@@ -122,29 +121,4 @@ model Alert {
   @@index([userId, isActive])
 }
 
-model CachedAnalysis {
-  id             String   @id @default(cuid())
-  marketKey      String   @unique
-  grade          String
-  confidence     Int
-  recommendation String
-  edgeSummary    String
-  keyFactors     Json
-  risks          Json
-  generatedAt    DateTime @default(now())
-  expiresAt      DateTime
 
-  @@index([marketKey])
-  @@index([expiresAt])
-}
-
-model DailyPickCount {
-  id        String   @id @default(cuid())
-  userId    String
-  date      String
-  pickCount Int      @default(0)
-  propCount Int      @default(0)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, date])
-}

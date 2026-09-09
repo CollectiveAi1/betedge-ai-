@@ -20,7 +20,8 @@ try {
     process.exit(1);
   }
 
-} catch (err: any) {
+} catch {
+  // No seed file to inspect — nothing to guard against.
 }
 
 execSync("tsx --require dotenv/config scripts/seed.ts", { stdio: "inherit" });

@@ -19,7 +19,7 @@ interface PropDetailContentProps {
 
 export function PropDetailContent({ propId }: PropDetailContentProps) {
   const { data: session } = useSession();
-  const tier = (session?.user as any)?.subscriptionTier ?? 'FREE';
+  const tier = session?.user?.subscriptionTier ?? 'FREE';
   const limits = getTierLimits(tier);
 
   const [prop, setProp] = useState<any>(null);
@@ -225,8 +225,15 @@ export function PropDetailContent({ propId }: PropDetailContentProps) {
                       </ul>
                     </div>
 
-                    {/* Trend bar */}
-                    <TrendBar hits={7} total={10} label="Last 10 Games Hit Rate" />
+                    {/* Trend bar — omitted when the prop carries no trend history,
+                        rather than showing an invented hit rate. */}
+                    {typeof prop?.trendHits === 'number' && (prop?.trendTotal ?? 0) > 0 && (
+                      <TrendBar
+                        hits={prop.trendHits}
+                        total={prop.trendTotal}
+                        label={`Last ${prop.trendTotal} Games Hit Rate`}
+                      />
+                    )}
 
                     {/* Disclaimer */}
                     <div className="flex items-start gap-2 p-3 bg-secondary/50 rounded-lg">

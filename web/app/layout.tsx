@@ -1,4 +1,4 @@
-import { Inter } from 'next/font/google';
+import { DM_Sans, JetBrains_Mono, Plus_Jakarta_Sans } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/sonner';
@@ -8,7 +8,12 @@ import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
+// tailwind.config.ts maps font-sans/font-display/font-mono onto these three
+// variables. Only --font-sans used to be defined, so every `font-display` and
+// `font-mono` class in the app fell through to a system fallback.
+const dmSans = DM_Sans({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
+const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-display', display: 'swap' });
+const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap' });
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXTAUTH_URL || 'http://localhost:3000'),
@@ -38,10 +43,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning className="dark">
-      <head>
-        <script src="https://apps.abacus.ai/chatllm/appllm-lib.js" />
-      </head>
-      <body className={`${inter.variable} font-sans antialiased`}>
+      <body
+        className={`${dmSans.variable} ${jakarta.variable} ${jetbrainsMono.variable} font-sans antialiased`}
+      >
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"

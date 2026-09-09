@@ -18,14 +18,6 @@ export function setCache(key: string, data: any, ttlMs: number): void {
   });
 }
 
-export function invalidateCache(keyPattern: string): void {
-  for (const key of cache.keys()) {
-    if (key.includes(keyPattern)) {
-      cache.delete(key);
-    }
-  }
-}
-
 // TTL constants
 export const ODDS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 export const ANALYSIS_CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours
