@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Colors, Spacing, BorderRadius, Typography } from '../constants/theme';
 import { ResponsibleGamblingFooter } from '../components/ResponsibleGamblingFooter';
+import { LoadingSkeleton } from '../components/LoadingSkeleton';
 import { getUserPicks } from '../services/api';
 import type { SavedPick, PickResult } from '../types';
 
@@ -87,7 +88,11 @@ export default function PickTrackerScreen() {
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={Colors.accent} />}
         ListFooterComponent={<ResponsibleGamblingFooter />}
         ListEmptyComponent={
-          <View style={styles.empty}><Text style={styles.emptyText}>No picks found.</Text></View>
+          isLoading ? (
+            <LoadingSkeleton />
+          ) : (
+            <View style={styles.empty}><Text style={styles.emptyText}>No picks found.</Text></View>
+          )
         }
         contentContainerStyle={{ paddingBottom: Spacing.lg }}
       />

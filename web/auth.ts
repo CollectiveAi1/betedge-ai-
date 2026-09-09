@@ -13,11 +13,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: '/login',
   },
   providers: [
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID ?? '',
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-      allowDangerousEmailAccountLinking: true,
-    }),
+    // Registered only when configured: an unconfigured provider still renders a
+    // sign-in button that fails at the redirect.
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ? [
+          Google({
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+            allowDangerousEmailAccountLinking: true,
+          }),
+        ]
+      : []),
     CredentialsProvider({
       name: 'credentials',
       credentials: {
@@ -27,7 +33,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email as string },
+          where: { email: String(credentials.email).trim().toLowerCase() },
         });
         if (!user?.password) return null;
         const isValid = await bcrypt.compare(
@@ -65,9 +71,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (token?.id) {
         session.user.id = token.id as string;
       }
-      if (token?.subscriptionTier) {
-        (session.user as any).subscriptionTier = token.subscriptionTier as string;
-      }
+      session.user.subscriptionTier = token.subscriptionTier ?? 'FREE';
       return session;
     },
     async redirect({ url, baseUrl }) {

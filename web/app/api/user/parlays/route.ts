@@ -1,16 +1,16 @@
 export const dynamic = 'force-dynamic';
-import { auth } from '@/auth';
+import { requireUserId } from '@/lib/api-auth';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-export async function GET() {
-  const session = await auth();
-  if (!session?.user?.id) {
+export async function GET(request: Request) {
+  const userId = await requireUserId(request);
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {
     const parlays = await prisma.parlay.findMany({
-      where: { userId: session.user.id },
+      where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
@@ -22,8 +22,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const userId = await requireUserId(request);
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     const { legs, combinedOdds, name } = body ?? {};
     const parlay = await prisma.parlay.create({
       data: {
-        userId: session.user.id,
+        userId,
         legs: legs ?? [],
         combinedOdds: combinedOdds ?? 0,
         name: name ?? 'My Parlay',

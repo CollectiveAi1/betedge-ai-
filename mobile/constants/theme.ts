@@ -150,7 +150,3 @@ export const Shadows = Platform.select({
   },
 }) as Record<string, unknown>;
 
-export const GradientColors = {
-  primaryButton: ['#22C55E', '#16A34A'] as const,
-  cardHighlight: ['#1E293B', '#0F172A'] as const,
-} as const;

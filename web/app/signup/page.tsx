@@ -7,5 +7,7 @@ export const metadata = { title: 'Sign Up' };
 export default async function SignupPage() {
   const session = await auth();
   if (session) redirect('/dashboard');
-  return <SignupForm />;
+  // The Google button is only rendered when the provider is actually configured.
+  const googleEnabled = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+  return <SignupForm googleEnabled={googleEnabled} />;
 }

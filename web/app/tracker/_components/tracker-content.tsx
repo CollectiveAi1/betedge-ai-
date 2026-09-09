@@ -5,7 +5,7 @@ import { AppHeader } from '@/components/app-header';
 import { AppFooter } from '@/components/app-footer';
 import { PaywallGate } from '@/components/paywall-gate';
 import { getTierLimits } from '@/lib/tier-limits';
-import { ClipboardList, TrendingUp, TrendingDown, Check, X as XIcon, Minus } from 'lucide-react';
+import { ClipboardList, Check, X as XIcon, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
@@ -22,14 +22,13 @@ interface Pick {
 
 export function TrackerContent() {
   const { data: session } = useSession();
-  const tier = (session?.user as any)?.subscriptionTier ?? 'FREE';
+  const tier = session?.user?.subscriptionTier ?? 'FREE';
   const limits = getTierLimits(tier);
 
   const [picks, setPicks] = useState<Pick[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadPicks = useCallback(async () => {
-    setLoading(true);
     try {
       const res = await fetch('/api/user/picks');
       const data = await res.json().catch(() => ({}));
@@ -38,7 +37,11 @@ export function TrackerContent() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { loadPicks(); }, [loadPicks]);
+  // Fires once on mount; `loading` already starts true, so the loader does
+  // not have to raise it synchronously from inside the effect.
+  useEffect(() => {
+    void loadPicks();
+  }, [loadPicks]);
 
   async function updateResult(pickId: string, result: string) {
     try {
@@ -50,6 +53,9 @@ export function TrackerContent() {
       if (res.ok) {
         toast.success(`Pick marked as ${result}`);
         loadPicks();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data?.error ?? 'Failed to update');
       }
     } catch { toast.error('Failed to update'); }
   }

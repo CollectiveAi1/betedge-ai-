@@ -10,7 +10,7 @@ import { LoadingSkeleton } from '../../components/LoadingSkeleton';
 import { ResponsibleGamblingFooter } from '../../components/ResponsibleGamblingFooter';
 import { useFilterStore } from '../../stores/filterStore';
 import { getGames } from '../../services/api';
-import type { Game, Sport } from '../../types';
+import type { Game } from '../../types';
 
 export default function GamesTab() {
   const router = useRouter();

@@ -1,16 +1,16 @@
 {
   "expo": {
-    "name": "Betedge Ai Mobile",
-    "slug": "abacusai-mobile-apps",
+    "name": "BetEdge AI",
+    "slug": "betedge-ai",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "scheme": "abacusai1788931130",
+    "scheme": "betedgeai",
     "backgroundColor": "#0F172A",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.abacusai.betedgeaimobile.t1788931130",
+      "bundleIdentifier": "ai.betedge.app",
       "buildNumber": "1"
     },
     "android": {
@@ -21,7 +21,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.abacusai.betedgeaimobile.t1788931130",
+      "package": "ai.betedge.app",
       "versionCode": 1,
       "intentFilters": [
         {
@@ -29,7 +29,7 @@
           "autoVerify": true,
           "data": [
             {
-              "scheme": "abacusai1788931130",
+              "scheme": "betedgeai",
               "host": "*"
             }
           ],

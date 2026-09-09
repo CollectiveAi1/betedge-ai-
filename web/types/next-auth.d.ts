@@ -1,25 +1,24 @@
-import { DefaultSession } from 'next-auth';
-import { JWT } from 'next-auth/jwt';
+import type { DefaultSession } from 'next-auth';
 
 declare module 'next-auth' {
   interface Session {
     user: {
       id: string;
-      role?: string;
-      // Add custom fields here
+      subscriptionTier: string;
     } & DefaultSession['user']; // includes name, email, image
   }
 
   interface User {
     id: string;
-    role?: string;
-    // Mirror any fields added to Session['user'] above
+    subscriptionTier?: string;
   }
 }
 
-declare module 'next-auth/jwt' {
+// next-auth v5 re-exports the JWT interface from @auth/core, so the augmentation has
+// to target that module — augmenting 'next-auth/jwt' alone does not merge into it.
+declare module '@auth/core/jwt' {
   interface JWT {
-    id: string;
-    role?: string;
+    id?: string;
+    subscriptionTier?: string;
   }
 }

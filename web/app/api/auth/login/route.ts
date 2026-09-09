@@ -2,13 +2,14 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
+import { signApiToken } from '@/lib/api-token';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { email, password } = body ?? {};
 
-    if (!email || !password) {
+    if (typeof email !== 'string' || typeof password !== 'string' || !email || !password) {
       return NextResponse.json(
         { error: 'Email and password are required' },
         { status: 400 }
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
     }
 
     const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+      where: { email: String(email).trim().toLowerCase() },
     });
 
     if (!user?.password) {
@@ -34,7 +35,10 @@ export async function POST(request: Request) {
       );
     }
 
+    // The web app signs in through NextAuth; this route exists for the native
+    // client, which needs a bearer token rather than a session cookie.
     return NextResponse.json({
+      token: await signApiToken(user.id),
       user: {
         id: user.id,
         email: user.email,

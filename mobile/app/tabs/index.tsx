@@ -14,6 +14,7 @@ import { ResponsibleGamblingFooter } from '../../components/ResponsibleGamblingF
 import { useFilterStore } from '../../stores/filterStore';
 import { useAuthStore } from '../../stores/authStore';
 import { getPicks, savePick } from '../../services/api';
+import { notify } from '../../utils/notify';
 import type { Pick } from '../../types';
 
 export default function TodayTab() {
@@ -33,13 +34,22 @@ export default function TodayTab() {
   const isFreeTier = tier === 'free';
 
   const handleSave = useCallback(async (pickId: string) => {
-    await savePick(pickId);
-    setSavedIds((prev) => {
-      const next = new Set(prev);
-      next.add(pickId);
-      return next;
-    });
-  }, []);
+    const pick = safePicks.find((p) => p?.id === pickId);
+    if (!pick) return;
+    try {
+      await savePick({
+        sport: pick.sport,
+        statType: pick.statType,
+        playerName: pick.playerName,
+        line: pick.line,
+        recommendation: pick.recommendation,
+        odds: pick.bookOdds?.find((o) => o?.isBest)?.odds ?? pick.bookOdds?.[0]?.odds ?? -110,
+      });
+      setSavedIds((prev) => new Set(prev).add(pickId));
+    } catch {
+      notify('Could not save that pick. Please try again.');
+    }
+  }, [safePicks]);
 
   const renderItem = useCallback(({ item, index }: { item: Pick; index: number }) => {
     if (isFreeTier && index >= FREE_LIMIT) {

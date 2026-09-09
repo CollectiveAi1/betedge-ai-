@@ -1,29 +1,32 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
 import { AppHeader } from '@/components/app-header';
 import { AppFooter } from '@/components/app-footer';
 import { SportFilter } from '@/components/sport-filter';
 import { PickCard } from '@/components/pick-card';
-import { PaywallGate } from '@/components/paywall-gate';
+import { LockedPicksNotice } from '@/components/locked-picks-notice';
 import { PickCardSkeleton } from '@/components/loading-skeleton';
 import type { SportKey } from '@/lib/sports-config';
-import { getTierLimits } from '@/lib/tier-limits';
 import { Target, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
+import { addPickToParlay, savePickToTracker, type PickLike } from '@/lib/pick-actions';
 
 export function PropsContent() {
-  const { data: session } = useSession();
   const router = useRouter();
   const [sport, setSport] = useState<SportKey | 'all'>('all');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [props, setProps] = useState<any[]>([]);
+  const [totalProps, setTotalProps] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  const tier = (session?.user as any)?.subscriptionTier ?? 'FREE';
-  const limits = getTierLimits(tier);
+
+  // Debounced so typing a player name issues one request instead of one per keystroke.
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     async function load() {
@@ -31,18 +34,20 @@ export function PropsContent() {
       try {
         const params = new URLSearchParams();
         if (sport !== 'all') params.set('sport', sport);
-        if (search) params.set('search', search);
+        if (debouncedSearch) params.set('search', debouncedSearch);
         const res = await fetch(`/api/sports/props?${params.toString()}`);
         const data = await res.json().catch(() => ({}));
         setProps(data?.props ?? []);
+        setTotalProps(data?.total ?? data?.props?.length ?? 0);
       } catch {
         setProps([]);
+        setTotalProps(0);
       } finally {
         setLoading(false);
       }
     }
     load();
-  }, [sport, search]);
+  }, [sport, debouncedSearch]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -82,28 +87,37 @@ export function PropsContent() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {(props ?? []).map((prop: any, i: number) => {
-              const isLocked = tier === 'FREE' && i >= limits.dailyProps;
+              const pick: PickLike = {
+                id: prop?.id ?? '',
+                playerName: prop?.playerName ?? 'Unknown',
+                team: prop?.team ?? '',
+                sport: prop?.sport ?? 'nfl',
+                statType: prop?.statType ?? '',
+                line: prop?.line ?? 0,
+                odds: prop?.overOdds ?? 0,
+                recommendation: prop?.recommendation ?? '',
+              };
               return (
-                <PaywallGate key={prop?.id ?? i} isLocked={isLocked}>
-                  <PickCard
-                    id={prop?.id ?? ''}
-                    playerName={prop?.playerName ?? 'Unknown'}
-                    team={prop?.team ?? ''}
-                    sport={prop?.sport ?? 'nfl'}
-                    statType={prop?.statType ?? ''}
-                    line={prop?.line ?? 0}
-                    odds={prop?.overOdds ?? 0}
-                    grade={prop?.grade ?? 'C'}
-                    confidence={prop?.confidence ?? 0}
-                    recommendation={prop?.recommendation ?? ''}
-                    edgeSummary={prop?.edgeSummary ?? ''}
-                    onSave={() => toast.success('Prop saved!')}
-                    onAddParlay={() => toast.success('Added to parlay!')}
-                    onClick={() => router.push(`/props/${prop?.id ?? ''}`)}
-                  />
-                </PaywallGate>
+                <PickCard
+                  key={prop?.id ?? i}
+                  id={prop?.id ?? ''}
+                  playerName={prop?.playerName ?? 'Unknown'}
+                  team={prop?.team ?? ''}
+                  sport={prop?.sport ?? 'nfl'}
+                  statType={prop?.statType ?? ''}
+                  line={prop?.line ?? 0}
+                  odds={prop?.overOdds ?? 0}
+                  grade={prop?.grade ?? 'C'}
+                  confidence={prop?.confidence ?? 0}
+                  recommendation={prop?.recommendation ?? ''}
+                  edgeSummary={prop?.edgeSummary ?? ''}
+                  onSave={() => savePickToTracker(pick)}
+                  onAddParlay={() => addPickToParlay(pick)}
+                  onClick={() => router.push(`/props/${prop?.id ?? ''}`)}
+                />
               );
             })}
+            <LockedPicksNotice hidden={totalProps - props.length} noun="props" />
           </div>
         )}
 

@@ -10,7 +10,7 @@ import { useState } from 'react';
 
 export function AccountContent() {
   const { data: session } = useSession();
-  const tier = (session?.user as any)?.subscriptionTier ?? 'FREE';
+  const tier = session?.user?.subscriptionTier ?? 'FREE';
   const [managingBilling, setManagingBilling] = useState(false);
 
   async function handleManageBilling() {
